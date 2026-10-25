@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { createProfile } from "../lib/api";
 
 export default function Onboarding() {
@@ -30,17 +30,18 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-surface px-4 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
-      <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-gray-900">Choose a name</h1>
-        <p className="mt-1 text-gray-500">
+    <div className="flex min-h-screen flex-col items-center justify-center px-4 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+      <div className="card w-full max-w-sm p-6 md:p-8">
+        <p className="eyebrow">One last thing</p>
+        <h1 className="mt-1 font-display text-3xl font-semibold text-fg">What should we call you?</h1>
+        <p className="mt-1 text-fg-2">
           This is what others see when they read your notes.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Display name <span className="text-red-500">*</span>
+            <label className="mb-1 block text-sm font-medium text-fg-2">
+              Display name <span className="text-red-300">*</span>
             </label>
             <input
               type="text"
@@ -50,12 +51,12 @@ export default function Onboarding() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="e.g. Alex B."
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-xl border border-line bg-glass px-4 py-3 text-sm outline-none focus:border-lamp focus:ring-2 focus:ring-lamp/20"
             />
           </div>
 
           {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
               {error}
             </p>
           )}
@@ -63,7 +64,7 @@ export default function Onboarding() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-primary py-3 font-semibold text-white disabled:opacity-60 active:opacity-80"
+            className="w-full rounded-xl btn-lamp py-3 font-semibold disabled:opacity-60 active:opacity-80"
           >
             {loading ? "Saving…" : "Start leaving notes"}
           </button>

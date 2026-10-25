@@ -39,21 +39,3 @@ export function friendlyAuthError(error) {
   }
   return "Something went wrong. Please try again.";
 }
-
-// e.g. "2 min ago", "3 h ago", "Jan 5"
-export function formatTimeAgo(date) {
-  const diff = Math.round((Date.now() - new Date(date).getTime()) / 1000);
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)} d ago`;
-  return new Date(date).toLocaleDateString([], { month: "short", day: "numeric" });
-}
-
-export function formatDate(date) {
-  return new Date(date).toLocaleDateString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
