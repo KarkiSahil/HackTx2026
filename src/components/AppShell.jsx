@@ -5,18 +5,29 @@ import Avatar from "./Avatar";
 import BottomNav from "./BottomNav";
 import NotificationBell from "./NotificationBell";
 
-export function Logo() {
-  return (
-    <Link to="/" className="flex items-center gap-2.5" aria-label="Katha, home">
+// The Katha mark: amber "क" tile and italic wordmark. Pass `to` to make it a link.
+export function Logo({ to }) {
+  const content = (
+    <>
       <span
-        className="flex h-[38px] w-[38px] items-center justify-center rounded-xl text-xl font-semibold text-on-lamp shadow-[0_8px_24px_rgba(234,88,12,0.35)]"
-        style={{ background: "linear-gradient(135deg, #FCD34D, #F59E0B 55%, #EA580C)" }}
+        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[12px] font-display text-[20px] font-semibold text-on-lamp"
+        style={{
+          background: "linear-gradient(135deg, #FCD34D, #EA580C)",
+          boxShadow: "0 6px 20px rgba(234,88,12,.35), inset 0 1px 0 rgba(255,255,255,.5)",
+        }}
         aria-hidden="true"
       >
         क
       </span>
-      <span className="font-display text-[26px] italic leading-none text-fg">Katha</span>
+      <span className="font-display text-[26px] font-semibold italic leading-none tracking-[-0.01em] text-fg">Katha</span>
+    </>
+  );
+  return to ? (
+    <Link to={to} className="flex items-center gap-3" aria-label="Katha, home">
+      {content}
     </Link>
+  ) : (
+    <div className="flex items-center gap-3">{content}</div>
   );
 }
 
@@ -30,7 +41,7 @@ export default function AppShell({ title, subtitle, back = false, actions, child
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-[1100] bg-bg/70 backdrop-blur-xl" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-3 px-4 py-3 md:px-8">
-          <Logo />
+          <Logo to="/" />
           <div className="flex items-center gap-2">
             {actions}
             <NotificationBell />

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Lock, MapPin } from "lucide-react";
 import { sendLoginCode, verifyLoginCode } from "../lib/api";
+import { Logo } from "../components/AppShell";
 import {
   normalizeEmail,
   isValidEmail,
@@ -101,11 +102,11 @@ export default function Login() {
       {/* Brand panel */}
       <aside className="relative hidden overflow-hidden bg-gradient-to-br from-amber-700 via-amber-600 to-orange-500 p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.14)_1px,transparent_0)] bg-[length:22px_22px]" />
-        <p className="relative font-display text-3xl font-semibold">Katha</p>
+        <div className="relative"><Logo /></div>
         <div className="relative max-w-md space-y-6">
-          <h2 className="font-display text-5xl font-semibold leading-tight">A memory for places.</h2>
+          <h2 className="font-display text-5xl font-semibold leading-tight">A place, a story, a memory</h2>
           <p className="text-lg text-amber-50/90">
-            How people felt, right here, at this moment. Left where it happened, for whoever comes next.
+            Leave it where you feel it. Hear it where it was left.
           </p>
           <ul className="space-y-3 text-amber-50">
             {[
@@ -128,7 +129,7 @@ export default function Login() {
       <div className="flex items-center justify-center px-4 py-10 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] pt-[calc(env(safe-area-inset-top)+2.5rem)]">
       <div className="w-full max-w-sm">
         <div className="mb-8">
-          <p className="font-display text-4xl font-semibold text-lamp lg:hidden">Katha</p>
+          <div className="mb-6 lg:hidden"><Logo /></div>
           <h1 className="mt-2 font-display text-2xl font-semibold text-fg lg:mt-0 lg:text-3xl">
             {step === "email" ? "Welcome" : "Check your email"}
           </h1>
