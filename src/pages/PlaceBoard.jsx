@@ -1,140 +1,235 @@
-import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, PenLine, AlertCircle, RefreshCw } from "lucide-react";
-import { getPlace, getNotesAtPlace } from "../lib/api";
-import { distanceMeters, isWithinRadius } from "../lib/geo";
-import NoteCard from "../components/NoteCard";
-import { NoteCardSkeleton } from "../components/Skeleton";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { AlertCircle, Lock, MapPin, Mic, PenLine, RefreshCw } from "lucide-react";
+import { getBoard, unlockPlace } from "../lib/api";
+import { distanceMeters, formatDistance, isPreciseEnough } from "../lib/geo";
+import { FEELINGS } from "../lib/stamp";
+import { useLiveLocation } from "../lib/useLiveLocation";
+import AppShell, { PageBody } from "../components/AppShell";
+import ChainLetterSection from "../components/ChainLetterSection";
+import ContextStamp from "../components/ContextStamp";
 import EmptyState from "../components/EmptyState";
-import LocationStatus from "../components/LocationStatus";
-import BottomNav from "../components/BottomNav";
+import { FeelingChip } from "../components/Feelings";
+import Sheet from "../components/Sheet";
+import { StoryCardSkeleton } from "../components/Skeleton";
+import StoryCard from "../components/StoryCard";
+import StoryPanel from "../components/StoryPanel";
+import VoiceNoteCard from "../components/VoiceNoteCard";
+
+const VIEWS = [
+  { id: "ranked", label: "For you" },
+  { id: "newest", label: "Newest" },
+  { id: "oldest", label: "Oldest first" },
+  { id: "feeling", label: "By feeling" },
+];
 
 export default function PlaceBoard() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [place, setPlace] = useState(null);
-  const [notes, setNotes] = useState([]);
+  const { location, loading: locating } = useLiveLocation();
+  const [sort, setSort] = useState("ranked");
+  const [feeling, setFeeling] = useState(null);
+  const [board, setBoard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [userLocation, setUserLocation] = useState(null);
-  const [locLoading, setLocLoading] = useState(true);
+  const [unlocked, setUnlocked] = useState(null);
+  const [unlockError, setUnlockError] = useState("");
+  const [openStory, setOpenStory] = useState(null);
+  const unlocking = useRef(false);
 
-  useEffect(() => {
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => {
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocLoading(false);
-      },
-      () => setLocLoading(false),
-      { timeout: 8000 },
-    );
-  }, []);
-
-  const load = useCallback(async () => {
-    setLoading(true);
+  const loadBoard = useCallback(async () => {
     setError("");
     try {
-      const [p, n] = await Promise.all([getPlace(id), getNotesAtPlace(id)]);
-      setPlace(p);
-      setNotes(n);
-    } catch {
-      setError("Could not load this place.");
+      setBoard(await getBoard(id, { sort, feeling: sort === "feeling" ? feeling ?? undefined : undefined }));
+    } catch (err) {
+      setError(err.code === "place_not_found" ? err.message : "Could not load this place.");
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, sort, feeling]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    loadBoard();
+  }, [loadBoard]);
 
-  const dist = place && userLocation
-    ? distanceMeters(userLocation, { lat: place.lat, lng: place.lng })
-    : null;
+  const place = board?.place;
+  const distance = place && location ? distanceMeters(location, place) : null;
+  const atPlace = Boolean(place) && isPreciseEnough(location) && distance <= place.radius_m;
 
-  const atPlace = place ? isWithinRadius(userLocation, place) : false;
+  const unlock = useCallback(async () => {
+    if (!location || unlocking.current) return;
+    unlocking.current = true;
+    setUnlockError("");
+    try {
+      setUnlocked(await unlockPlace(id, location));
+    } catch (err) {
+      setUnlockError(err.message);
+    } finally {
+      unlocking.current = false;
+    }
+  }, [id, location]);
+
+  // Unlock once on arrival (a failure waits for a manual refresh); lock again on leaving.
+  useEffect(() => {
+    if (atPlace && !unlocked && !unlockError) unlock();
+    if (!atPlace && unlocked) setUnlocked(null);
+  }, [atPlace, unlocked, unlockError, unlock]);
+
+  function refreshAll() {
+    loadBoard();
+    setUnlockError("");
+    setUnlocked(null);
+  }
+
+  const locked = board?.locked;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F5F0E8]">
-      <header
-        className="sticky top-0 z-10 border-b border-amber-100 bg-white px-4 py-3"
-        style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)" }}
-      >
-        <div className="mx-auto flex max-w-md items-center gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="truncate text-base font-bold text-gray-900">
-              {place?.name ?? "Loading…"}
-            </h1>
-          </div>
-          <button onClick={load} className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600">
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
-      </header>
-
-      <div className="sticky top-[57px] z-10 bg-white px-4 py-2 shadow-sm">
-        <div className="mx-auto max-w-md flex items-center justify-between gap-3">
-          <LocationStatus
-            isAtPlace={atPlace}
-            distanceMeters={dist}
-            loading={locLoading}
-          />
-          {atPlace && (
-            <button
-              onClick={() => navigate(`/place/${id}/note/new`)}
-              className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shrink-0"
-            >
-              <PenLine className="h-4 w-4" />
-              Leave a note
-            </button>
-          )}
-        </div>
-      </div>
-
-      <main className="mx-auto w-full max-w-md flex-1 px-4 pb-28 pt-3">
-        {loading && (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => <NoteCardSkeleton key={i} />)}
-          </div>
-        )}
+    <AppShell back title={place?.name ?? "Place"} subtitle={place?.description} actions={
+      <button onClick={refreshAll} className="rounded-lg p-1.5 text-fg-3" aria-label="Refresh">
+        <RefreshCw className="h-4 w-4" />
+      </button>
+    }>
+      <PageBody size="lg" className="space-y-5">
+        {loading && <div className="space-y-3">{[1, 2].map((i) => <StoryCardSkeleton key={i} />)}</div>}
 
         {!loading && error && (
           <div className="mt-8 flex flex-col items-center gap-3 text-center">
             <AlertCircle className="h-10 w-10 text-red-300" />
-            <p className="text-gray-500">{error}</p>
-            <button onClick={load} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white">
-              Retry
-            </button>
+            <p className="text-fg-2">{error}</p>
+            <button onClick={loadBoard} className="rounded-xl btn-lamp px-5 py-2.5 text-sm font-semibold">Retry</button>
           </div>
         )}
 
-        {!loading && !error && notes.length === 0 && (
-          <EmptyState
-            icon={PenLine}
-            message={
-              atPlace
-                ? "No notes here yet. Be the first to leave one!"
-                : "No notes here yet. Visit this place to leave the first one."
-            }
-            action={atPlace ? "Leave a note" : undefined}
-            onAction={atPlace ? () => navigate(`/place/${id}/note/new`) : undefined}
+        {!loading && board && (
+          <>
+            {atPlace ? (
+              <div className="flex items-center justify-between gap-3 rounded-2xl bg-here-bg p-4">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-here-fg">
+                  <MapPin className="h-4 w-4" /> You're here
+                </p>
+                <button
+                  onClick={() => navigate(`/compose?place=${place.id}`)}
+                  className="btn-primary min-h-[48px] gap-1.5 px-5 text-sm"
+                >
+                  <PenLine className="h-4 w-4" /> Leave something
+                </button>
+              </div>
+            ) : (
+              <p className="flex items-center gap-1.5 rounded-xl bg-lamp/10 px-3 py-2 text-xs text-lamp">
+                <Lock className="h-3.5 w-3.5 shrink-0" />
+                {locating
+                  ? "Finding your location…"
+                  : distance != null
+                    ? `${formatDistance(distance)} away. Voice notes and the chain letter open when you're within ${place.radius_m} m.`
+                    : "Voice notes and the chain letter open when you're here."}
+              </p>
+            )}
+            {unlockError && <p className="text-xs text-red-300">{unlockError}</p>}
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] md:items-start">
+            <div className="space-y-4">
+            {/* Voice notes */}
+            {unlocked ? (
+              unlocked.voice_notes.length > 0 && (
+                <section className="space-y-3">
+                  <h2 className="flex items-center gap-1.5 eyebrow">
+                    <Mic className="h-3.5 w-3.5" /> Voice notes
+                  </h2>
+                  {unlocked.voice_notes.map((note) => (
+                    <VoiceNoteCard key={note.id} note={note} atPlace={atPlace} location={location} onBlocked={refreshAll} />
+                  ))}
+                </section>
+              )
+            ) : (
+              locked.voice_notes.length > 0 && (
+                <section className="space-y-2 p-4 card">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+                    <Lock className="h-4 w-4 text-lamp" /> {locked.voice_notes.length}{" "}
+                    {locked.voice_notes.length === 1 ? "voice note" : "voice notes"}, listen when you're here
+                  </p>
+                  <ul className="space-y-1.5">
+                    {locked.voice_notes.slice(0, 5).map((v) => (
+                      <li key={v.id}><ContextStamp item={v} /></li>
+                    ))}
+                  </ul>
+                </section>
+              )
+            )}
+
+            {/* Chain letter */}
+            {unlocked ? (
+              <ChainLetterSection placeId={place.id} chain={unlocked.chain} location={location} onChanged={() => setUnlocked(null)} />
+            ) : (
+              locked.chain && (
+                <section className="space-y-2 rounded-2xl border border-lamp/20 bg-lamp/5 p-4">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+                    <Lock className="h-4 w-4 text-lamp" /> A chain letter is waiting
+                  </p>
+                  <ContextStamp item={locked.chain.latest} />
+                </section>
+              )
+            )}
+            {!unlocked && locked.voice_notes.length === 0 && !locked.chain && (
+              <p className="rounded-2xl border border-dashed border-lamp/20 p-4 text-sm text-fg-2">
+                No voice notes or chain letter here yet. Be the first when you visit.
+              </p>
+            )}
+            </div>
+
+            {/* Stories */}
+            <section className="space-y-3">
+              <h2 className="eyebrow">Stories</h2>
+              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Order stories">
+                {VIEWS.map((v) => (
+                  <button
+                    key={v.id}
+                    role="tab"
+                    aria-selected={sort === v.id}
+                    onClick={() => setSort(v.id)}
+                    className={`min-h-[40px] shrink-0 rounded-full px-4 text-[13px] font-semibold ${sort === v.id ? "bg-fg text-on-lamp" : "border border-line bg-glass text-fg-2 hover:text-fg"}`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              {sort === "feeling" && (
+                <div className="flex flex-wrap gap-1.5">
+                  {FEELINGS.map((f) => (
+                    <FeelingChip key={f} feeling={f} active={feeling === f} onClick={() => setFeeling(feeling === f ? null : f)} />
+                  ))}
+                </div>
+              )}
+
+              {board.stories.length === 0 ? (
+                <EmptyState
+                  icon={PenLine}
+                  message={feeling ? `No #${feeling} stories here yet.` : "No stories here yet."}
+                  action={atPlace ? "Leave the first one" : undefined}
+                  onAction={atPlace ? () => navigate(`/compose?place=${place.id}`) : undefined}
+                />
+              ) : (
+                board.stories.map((story) => (
+                  <StoryCard key={story.id} story={story} onOpen={(s) => setOpenStory(s)} />
+                ))
+              )}
+            </section>
+            </div>
+          </>
+        )}
+      </PageBody>
+
+      <Sheet open={Boolean(openStory)} onClose={() => setOpenStory(null)} title={place?.name ?? "Story"}>
+        {openStory && (
+          <StoryPanel
+            storyId={openStory.id}
+            location={location}
+            onBlocked={() => {
+              setOpenStory(null);
+              refreshAll();
+            }}
           />
         )}
-
-        {!loading && !error && notes.length > 0 && (
-          <div className="space-y-3">
-            {notes.map((note) => (
-              <NoteCard key={note.id} note={note} />
-            ))}
-          </div>
-        )}
-      </main>
-
-      <BottomNav />
-    </div>
+      </Sheet>
+    </AppShell>
   );
 }

@@ -1,25 +1,12 @@
 export default function Skeleton({ className = "" }) {
   return (
-    <div className={`animate-pulse rounded-xl bg-amber-100 ${className}`} />
+    <div className={`animate-pulse rounded-xl bg-lamp/15 ${className}`} />
   );
 }
 
-export function PlaceCardSkeleton() {
+export function StoryCardSkeleton() {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-5 w-16 rounded-full" />
-      </div>
-      <Skeleton className="mt-2 h-4 w-56" />
-      <Skeleton className="mt-1 h-4 w-24" />
-    </div>
-  );
-}
-
-export function NoteCardSkeleton() {
-  return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <div className="p-4 card">
       <Skeleton className="h-4 w-20 rounded-full" />
       <Skeleton className="mt-3 h-4 w-full" />
       <Skeleton className="mt-1 h-4 w-3/4" />

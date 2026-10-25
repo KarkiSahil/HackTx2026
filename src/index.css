@@ -1,16 +1,284 @@
 @import "tailwindcss";
 
 @theme {
+  /* Light theme (screens move off these as they adopt the lantern style). */
   --color-primary: #B45309;
   --color-primary-dark: #92400E;
   --color-primary-light: #D97706;
   --color-surface: #FFFDF7;
+  --color-paper: #F6F1E8;
   --color-ink: #1C1917;
+
+  /* Lantern design system: dark, warm, glowing, glassy. */
+  --color-bg: #0F0D0B;
+  --color-glass: rgba(255, 248, 235, 0.045);
+  --color-glass-raised: rgba(255, 248, 235, 0.07);
+  --color-line: rgba(255, 240, 220, 0.09);
+  --color-fg: #F5EFE6;
+  --color-fg-2: #B5AC9F;
+  --color-fg-3: #8E8579;
+  --color-lamp: #FCD34D;
+  --color-lamp-mid: #F59E0B;
+  --color-ember: #EA580C;
+  --color-on-lamp: #1A1208;
+  --color-here: #34D399;
+  --color-here-fg: #6EE7B7;
+  --color-here-bg: rgba(52, 211, 153, 0.12);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+}
+
+/* ── Lantern utilities ─────────────────────────────────────────────── */
+
+/* Page: near-black with soft lantern glows (amber near the top, faint rose in a corner). */
+@utility lantern-page {
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(60rem 36rem at 50% -12rem, rgba(252, 211, 77, 0.15), transparent 65%),
+    radial-gradient(40rem 30rem at 105% 110%, rgba(244, 114, 182, 0.07), transparent 60%);
+  background-attachment: fixed;
+  color: var(--color-fg);
+  color-scheme: dark;
+}
+
+/* Glass card: translucent warm surface, hairline border, top highlight, soft drop shadow. */
+@utility glass {
+  background: var(--color-glass);
+  border: 1px solid var(--color-line);
+  border-radius: 1.5rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 48px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+@utility glass-raised {
+  background: var(--color-glass-raised);
+  border: 1px solid var(--color-line);
+  border-radius: 1.5rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 48px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+/* Primary action: amber → ember lantern with a warm glow. */
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 56px;
+  padding: 0 1.5rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--color-lamp), var(--color-lamp-mid) 55%, var(--color-ember));
+  color: var(--color-on-lamp);
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(234, 88, 12, 0.35);
+  transition: filter 150ms, transform 150ms, box-shadow 150ms;
+  &:hover { filter: brightness(1.06); }
+  &:active { transform: translateY(1px); }
+  &:disabled { opacity: 0.45; box-shadow: none; cursor: not-allowed; }
+}
+
+/* Amber gradient fill for compact buttons (same look as btn-primary, any size). */
+@utility btn-lamp {
+  background: linear-gradient(135deg, var(--color-lamp), var(--color-lamp-mid) 55%, var(--color-ember));
+  color: var(--color-on-lamp);
+  font-weight: 600;
+  box-shadow: 0 8px 22px rgba(234, 88, 12, 0.3);
+  &:disabled { opacity: 0.45; box-shadow: none; cursor: not-allowed; }
+}
+
+/* Quiet glass button (secondary actions, icon buttons). */
+@utility btn-glass {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: 0.875rem;
+  background: var(--color-glass);
+  border: 1px solid var(--color-line);
+  color: var(--color-fg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 150ms;
+  &:hover { background: var(--color-glass-raised); }
+}
+
+/* Tinted pill. Set the tint with style={{ "--chip": "#C4B5FD" }} (see src/lib/tints.js). */
+@utility chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--chip, var(--color-fg-2));
+  background: color-mix(in srgb, var(--chip, var(--color-fg-2)) 14%, transparent);
+}
+
+/* Selected state: amber text on a faint amber fill with a thin amber ring. */
+@utility selected {
+  color: var(--color-lamp);
+  background: rgba(252, 211, 77, 0.12);
+  box-shadow: 0 0 0 1px rgba(252, 211, 77, 0.35);
+}
+
+/* Big Fraunces page title; wrap one word in <em> for the italic flourish. */
+@utility title-display {
+  font-family: var(--font-display);
+  font-size: clamp(2.75rem, 5vw, 3.75rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  & em { font-style: italic; font-weight: 400; }
+}
+
+/* UI label: 12px uppercase. */
+@utility label-caps {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-fg-3);
+}
+
+/* Glowing status dot (unread, "you're here"). */
+@utility glow-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent), 0 0 12px currentColor;
+}
+
+html {
+  background-color: var(--color-bg);
+  color-scheme: dark;
 }
 
 body {
-  background-color: #F5F0E8;
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(60rem 36rem at 50% -12rem, rgba(252, 211, 77, 0.15), transparent 65%),
+    radial-gradient(40rem 30rem at 105% 110%, rgba(244, 114, 182, 0.07), transparent 60%);
+  background-attachment: fixed;
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(252, 211, 77, 0.3);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-lamp);
+  outline-offset: 2px;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+/* Card: the lantern glass surface. */
+@utility card {
+  background: var(--color-glass);
+  border: 1px solid var(--color-line);
+  border-radius: 1.5rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 48px rgba(0, 0, 0, 0.3);
+}
+
+/* Small uppercase section label. */
+@utility eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-fg-3);
+}
+
+/* Map: Leaflet on CARTO Dark Matter. */
+.leaflet-container {
+  background: #0B0A09;
+  font-family: var(--font-sans);
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: rgba(24, 20, 16, 0.94);
+  color: var(--color-fg);
+  border: 1px solid var(--color-line);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+.leaflet-popup-content-wrapper { border-radius: 1rem; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--color-fg-2); }
+.leaflet-control-attribution.leaflet-control {
+  background: rgba(15, 13, 11, 0.72);
+  color: var(--color-fg-3);
+  border-radius: 0.5rem 0 0 0;
+}
+.leaflet-control-attribution a { color: var(--color-fg-2); }
+
+/* The place you are at: a large amber teardrop with its story count. */
+.katha-pin-here {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: linear-gradient(135deg, #FCD34D, #F59E0B 55%, #EA580C);
+  box-shadow: 0 0 0 6px rgba(252, 211, 77, 0.18), 0 12px 32px rgba(234, 88, 12, 0.55);
+}
+.katha-pin-here span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(45deg);
+  color: #1A1208;
+  font: 700 15px/1 var(--font-display);
+}
+
+/* Other places: a small dark circle with an amber count; recent ones glow. */
+.katha-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: rgba(24, 20, 16, 0.92);
+  border: 1px solid rgba(252, 211, 77, 0.45);
+  color: #FCD34D;
+  font: 700 12px/1 var(--font-sans);
+  box-shadow: 0 0 14px rgba(252, 211, 77, 0.25);
+}
+.katha-pin--glow {
+  animation: katha-glow 2.4s ease-in-out infinite;
+}
+.katha-pin--focus {
+  border-color: #FCD34D;
+  box-shadow: 0 0 0 4px rgba(252, 211, 77, 0.3), 0 0 18px rgba(252, 211, 77, 0.5);
+}
+@keyframes katha-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(252, 211, 77, 0.25); }
+  50% { box-shadow: 0 0 22px rgba(252, 211, 77, 0.6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .katha-pin--glow { animation: none; box-shadow: 0 0 18px rgba(252, 211, 77, 0.45); }
+}
+.katha-me {
+  width: 18px;
+  height: 18px;
+  background: #34D399;
+  border: 3px solid #0F0D0B;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.3), 0 0 16px rgba(52, 211, 153, 0.6);
 }
 
 #root {

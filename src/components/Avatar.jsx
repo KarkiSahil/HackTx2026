@@ -1,31 +1,45 @@
-const COLORS = [
-  "bg-primary",
-  "bg-blue-500",
-  "bg-emerald-500",
-  "bg-violet-500",
-  "bg-orange-500",
-  "bg-pink-500",
+// Warm initials backgrounds, picked by name so each person keeps theirs.
+const GRADIENTS = [
+  "linear-gradient(135deg, #FCD34D, #EA580C)",
+  "linear-gradient(135deg, #FDA4AF, #E11D48)",
+  "linear-gradient(135deg, #6EE7B7, #0F766E)",
+  "linear-gradient(135deg, #C4B5FD, #6D28D9)",
+  "linear-gradient(135deg, #7DD3FC, #0369A1)",
+  "linear-gradient(135deg, #FDBA74, #C2410C)",
 ];
 
-export default function Avatar({ name = "", size = "md" }) {
+const SIZES = {
+  sm: "h-7 w-7 text-xs",
+  md: "h-10 w-10 text-sm",
+  header: "h-11 w-11 text-base",
+  lg: "h-16 w-16 text-2xl",
+  xl: "h-[124px] w-[124px] text-5xl",
+};
+
+export default function Avatar({ name = "", size = "md", className = "", anonymous = false }) {
+  if (anonymous) {
+    return (
+      <div
+        className={`${SIZES[size]} flex shrink-0 items-center justify-center rounded-full border border-dashed border-fg-3 font-display text-fg-2 ${className}`}
+        aria-hidden="true"
+      >
+        ?
+      </div>
+    );
+  }
   const initials = name
     .split(" ")
     .map((w) => w[0])
     .slice(0, 2)
     .join("")
     .toUpperCase();
-
-  const color = COLORS[name.charCodeAt(0) % COLORS.length];
-  const sz =
-    size === "lg"
-      ? "h-16 w-16 text-2xl"
-      : size === "sm"
-        ? "h-7 w-7 text-xs"
-        : "h-10 w-10 text-sm";
+  const hash = [...name].reduce((n, c) => n + c.charCodeAt(0), 0);
 
   return (
     <div
-      className={`${sz} ${color} flex shrink-0 items-center justify-center rounded-full font-semibold text-white`}
+      className={`${SIZES[size]} flex shrink-0 items-center justify-center rounded-full font-display font-semibold text-on-lamp ${className}`}
+      style={{ background: GRADIENTS[hash % GRADIENTS.length] }}
+      aria-hidden="true"
     >
       {initials || "?"}
     </div>

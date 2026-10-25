@@ -1,0 +1,50 @@
+services:
+  web:
+    image: katha-web:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Set VITE_SUPABASE_URL in .env}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?Set VITE_SUPABASE_ANON_KEY in .env}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        VITE_ALLOWED_EMAIL_DOMAIN: ${VITE_ALLOWED_EMAIL_DOMAIN:-}
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    image: katha-api:local
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL in .env}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY in .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      PORT: ${PORT:-3000}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + process.env.PORT + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
