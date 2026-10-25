@@ -2,34 +2,97 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
-  check:
+  changes:
     runs-on: ubuntu-latest
-
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      api: ${{ steps.filter.outputs.api }}
     steps:
-      # 1. Checkout the repo
       - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'Dockerfile'
+              - 'nginx.conf'
+              - '.dockerignore'
+              - 'src/**'
+              - 'public/**'
+              - 'index.html'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'vite.config.js'
+              - 'vitest.config.js'
+              - 'vitest.setup.js'
+              - 'eslint.config.js'
+              - 'docker-compose.yml'
+              - '.env.example'
+              - '.github/workflows/**'
+            api:
+              - 'api/**'
+              - 'docker-compose.yml'
+              - '.env.example'
+              - '.github/workflows/**'
 
-      # 2. Set up Node 22 with npm cache
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      # 3. Install exact dependencies from lock file
+          cache-dependency-path: package-lock.json
       - run: npm ci
-
-      # 4. Lint — fails on any warning or error
       - run: npm run lint
-
-      # 5. Run tests once (no watch mode)
       - run: npm test -- --run
-
-      # 6. Production build — uses placeholder env so no real secrets needed
-      - run: npm run build
+      - name: Build web bundle
+        run: npm run build
         env:
           VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_ANON_KEY: placeholder-key
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+          VITE_API_URL: https://api.invalid
+          VITE_ALLOWED_EMAIL_DOMAIN: ""
+      - name: Check bundle for server-role key references
+        run: |
+          if grep -Riq --binary-files=without-match "service_role" dist; then
+            echo "The web bundle must not contain service_role."
+            exit 1
+          fi
+      - name: Build web container
+        run: |
+          docker build --tag katha-web:ci \
+            --build-arg VITE_SUPABASE_URL=https://placeholder.supabase.co \
+            --build-arg VITE_SUPABASE_ANON_KEY=placeholder-anon-key \
+            --build-arg VITE_API_URL=https://api.invalid \
+            --build-arg VITE_ALLOWED_EMAIL_DOMAIN= \
+            .
+
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - run: npm ci --prefix api
+      - run: npm run lint --prefix api
+      - run: npm test --prefix api
+      - run: npm audit --prefix api --audit-level=high
+      - name: Build API container
+        run: docker build --file api/Dockerfile --tag katha-api:ci api

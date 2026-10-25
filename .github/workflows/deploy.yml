@@ -1,0 +1,195 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_sha == github.sha
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io \
+            --username "$GITHUB_ACTOR" \
+            --password-stdin
+      - name: Build and push web image
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_ALLOWED_EMAIL_DOMAIN: ${{ vars.VITE_ALLOWED_EMAIL_DOMAIN }}
+        run: |
+          set -euo pipefail
+          : "${VITE_SUPABASE_URL:?Set the production VITE_SUPABASE_URL variable}"
+          : "${VITE_SUPABASE_ANON_KEY:?Set the production VITE_SUPABASE_ANON_KEY variable}"
+          : "${VITE_API_URL:?Set the production VITE_API_URL variable}"
+          image_base="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker build \
+            --build-arg "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" \
+            --build-arg "VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY" \
+            --build-arg "VITE_API_URL=$VITE_API_URL" \
+            --build-arg "VITE_ALLOWED_EMAIL_DOMAIN=${VITE_ALLOWED_EMAIL_DOMAIN:-}" \
+            --tag "$image_base/web:sha-$RELEASE_SHA" \
+            --tag "$image_base/web:main" \
+            .
+          docker push "$image_base/web:sha-$RELEASE_SHA"
+          docker push "$image_base/web:main"
+      - name: Build and push API image
+        run: |
+          set -euo pipefail
+          image_base="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker build \
+            --file api/Dockerfile \
+            --tag "$image_base/api:sha-$RELEASE_SHA" \
+            --tag "$image_base/api:main" \
+            api
+          docker push "$image_base/api:sha-$RELEASE_SHA"
+          docker push "$image_base/api:main"
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    permissions:
+      contents: read
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      IMAGE_BASE: ghcr.io/${{ github.repository }}
+    steps:
+      - name: Trigger Render deployments
+        id: trigger
+        env:
+          RENDER_WEB_DEPLOY_HOOK_URL: ${{ secrets.RENDER_WEB_DEPLOY_HOOK_URL }}
+          RENDER_API_DEPLOY_HOOK_URL: ${{ secrets.RENDER_API_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          : "${RENDER_WEB_DEPLOY_HOOK_URL:?Set the production web deploy hook secret}"
+          : "${RENDER_API_DEPLOY_HOOK_URL:?Set the production API deploy hook secret}"
+
+          web_response="$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --get \
+            --data-urlencode "imgURL=$IMAGE_BASE/web:sha-$RELEASE_SHA" \
+            "$RENDER_WEB_DEPLOY_HOOK_URL")"
+          api_response="$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --get \
+            --data-urlencode "imgURL=$IMAGE_BASE/api:sha-$RELEASE_SHA" \
+            "$RENDER_API_DEPLOY_HOOK_URL")"
+
+          web_deploy_id="$(jq -er '.id // empty' <<< "$web_response")"
+          api_deploy_id="$(jq -er '.id // empty' <<< "$api_response")"
+          echo "web_deploy_id=$web_deploy_id" >> "$GITHUB_OUTPUT"
+          echo "api_deploy_id=$api_deploy_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Render deployments
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_WEB_SERVICE_ID: ${{ vars.RENDER_WEB_SERVICE_ID }}
+          RENDER_API_SERVICE_ID: ${{ vars.RENDER_API_SERVICE_ID }}
+          WEB_DEPLOY_ID: ${{ steps.trigger.outputs.web_deploy_id }}
+          API_DEPLOY_ID: ${{ steps.trigger.outputs.api_deploy_id }}
+        run: |
+          set -euo pipefail
+          : "${RENDER_API_KEY:?Set the production Render API key secret}"
+          : "${RENDER_WEB_SERVICE_ID:?Set the production web service ID variable}"
+          : "${RENDER_API_SERVICE_ID:?Set the production API service ID variable}"
+
+          wait_for_deploy() {
+            local service_id="$1"
+            local deploy_id="$2"
+            local attempt
+            local response
+            local status
+
+            for attempt in $(seq 1 60); do
+              response="$(curl --silent --show-error --fail \
+                --header "Authorization: Bearer $RENDER_API_KEY" \
+                "https://api.render.com/v1/services/$service_id/deploys/$deploy_id")"
+              status="$(jq -er '.status' <<< "$response")"
+              echo "Render service $service_id deploy status: $status"
+
+              case "$status" in
+                live) return 0 ;;
+                build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                  return 1
+                  ;;
+              esac
+              sleep 10
+            done
+
+            echo "Timed out waiting for Render service $service_id" >&2
+            return 1
+          }
+
+          wait_for_deploy "$RENDER_WEB_SERVICE_ID" "$WEB_DEPLOY_ID" &
+          web_pid=$!
+          wait_for_deploy "$RENDER_API_SERVICE_ID" "$API_DEPLOY_ID" &
+          api_pid=$!
+          wait "$web_pid"
+          wait "$api_pid"
+
+      - name: Verify public health endpoints
+        env:
+          WEB_HEALTH_URL: ${{ vars.RENDER_WEB_HEALTH_URL }}
+          API_HEALTH_URL: ${{ vars.RENDER_API_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          : "${WEB_HEALTH_URL:?Set the production web health URL variable}"
+          : "${API_HEALTH_URL:?Set the production API health URL variable}"
+
+          check_web_health() {
+            local attempt
+            for attempt in $(seq 1 24); do
+              if [[ "$(curl --silent --show-error --fail "$WEB_HEALTH_URL" || true)" == "ok" ]]; then
+                return 0
+              fi
+              sleep 5
+            done
+            echo "Web health check failed: $WEB_HEALTH_URL" >&2
+            return 1
+          }
+
+          check_api_health() {
+            local attempt
+            local response
+            for attempt in $(seq 1 24); do
+              response="$(curl --silent --show-error --fail "$API_HEALTH_URL" || true)"
+              if jq -e '.status == "ok"' <<< "$response" >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 5
+            done
+            echo "API health check failed: $API_HEALTH_URL" >&2
+            return 1
+          }
+
+          check_web_health &
+          web_pid=$!
+          check_api_health &
+          api_pid=$!
+          wait "$web_pid"
+          wait "$api_pid"

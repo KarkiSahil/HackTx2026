@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+.env*
+.git
+.github
+.claude
+coverage
+npm-debug.log*
+api
+supabase
